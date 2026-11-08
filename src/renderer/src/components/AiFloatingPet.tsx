@@ -11,8 +11,8 @@ const SUGGESTED_PROMPTS = [
 ]
 
 const DRAG_THRESHOLD_PX = 6
-const PANEL_W = 480
-const PANEL_H_VH = 68
+const PANEL_W = 520
+const PANEL_H_VH = 72
 
 interface PiModelRow {
   provider: string
@@ -251,52 +251,51 @@ export function AiFloatingPet({ piMode, initError, following }: AiFloatingPetPro
   return (
     <div ref={hostRef} className="ai-pet-host positioned" style={{ left: pos.x, top: pos.y }}>
       {open && (
-        <div
-          className="ai-pet-panel-large glass-panel"
-          style={panelStyle}
-          role="dialog"
-          aria-label="AI 助手对话"
-        >
-          <header className="ai-pet-panel-head">
-            <div className="ai-pet-panel-title">
-              <Sparkles size={16} />
-              <span>体育 AI 助手</span>
+        <div className="ai-codex-window glass-panel" style={panelStyle} role="dialog" aria-label="AI 助手对话">
+          <header className="ai-codex-toolbar">
+            <div className="ai-codex-toolbar-left">
+              <Sparkles size={18} />
+              <span className="ai-codex-title">SportDesk AI</span>
               <span className={`mode-pill tiny ${piMode === 'sdk' ? 'mode-sdk' : 'mode-stub'}`}>
-                {piMode === 'sdk' ? 'Pi' : 'Stub'}
+                {piMode === 'sdk' ? 'Pi 在线' : 'Stub'}
               </span>
+            </div>
+            <div className="ai-codex-toolbar-center">
+              <label className="sr-only" htmlFor="pi-model-select">
+                模型
+              </label>
+              <select
+                id="pi-model-select"
+                className="model-picker toolbar"
+                value={selectedKey}
+                onChange={(e) => void handleModelChange(e.target.value)}
+                disabled={models.length === 0}
+              >
+                {models.length === 0 ? (
+                  <option value="">加载模型…</option>
+                ) : (
+                  models.map((m) => (
+                    <option key={`${m.provider}::${m.modelId}`} value={`${m.provider}::${m.modelId}`}>
+                      {m.displayName}
+                      {m.authConfigured ? '' : '（未配置密钥）'}
+                    </option>
+                  ))
+                )}
+              </select>
             </div>
             <button type="button" className="icon-btn ghost" onClick={() => setOpen(false)} aria-label="收起">
               <X size={18} />
             </button>
           </header>
 
-          <div className="ai-pet-model-row">
-            <label className="model-picker-label" htmlFor="pi-model-select">
-              模型
-            </label>
-            <select
-              id="pi-model-select"
-              className="model-picker"
-              value={selectedKey}
-              onChange={(e) => void handleModelChange(e.target.value)}
-              disabled={models.length === 0}
-            >
-              {models.length === 0 ? (
-                <option value="">加载中…</option>
-              ) : (
-                models.map((m) => (
-                  <option key={`${m.provider}::${m.modelId}`} value={`${m.provider}::${m.modelId}`}>
-                    {m.displayName}
-                    {m.authConfigured ? '' : '（未配置密钥）'}
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
-          {modelHint && <p className="ai-pet-model-hint">{modelHint}</p>}
-          {initError && <p className="ai-pet-warn">{initError.slice(0, 120)}</p>}
+          {(modelHint || initError) && (
+            <div className="ai-codex-status-bar">
+              {modelHint && <span>{modelHint}</span>}
+              {initError && <span className="warn">{initError.slice(0, 140)}</span>}
+            </div>
+          )}
 
-          <div className="ai-pet-prompts expanded">
+          <div className="ai-codex-prompts">
             {SUGGESTED_PROMPTS.map((p) => (
               <button key={p} type="button" className="pet-prompt-chip" onClick={() => void handleSend(p)} disabled={sending}>
                 {p}
@@ -315,38 +314,46 @@ export function AiFloatingPet({ piMode, initError, following }: AiFloatingPetPro
             ))}
           </div>
 
-          <div className="ai-pet-messages large" ref={scrollRef}>
+          <div className="ai-codex-thread" ref={scrollRef}>
             {messages.length === 0 && !streaming && (
-              <div className="ai-pet-empty large">
-                <p>拖拽右下角光球可换位；点击展开对话</p>
+              <div className="ai-codex-empty">
+                <p>像 Codex 一样对话：下方输入，上方为消息流</p>
+                <p className="muted">拖动摇晃宠物可换位置（单击仍用于开关）</p>
               </div>
             )}
             {messages.map((msg, i) => (
-              <div key={i} className={`chat-line ${msg.role}`}>
-                <span className="chat-line-role">{msg.role === 'user' ? '你' : '助手'}</span>
-                <div className="chat-line-body">{msg.text}</div>
-              </div>
+              <article key={i} className={`codex-msg ${msg.role}`}>
+                <header>{msg.role === 'user' ? '你' : '助手'}</header>
+                <div className="codex-msg-body">{msg.text}</div>
+              </article>
             ))}
             {streaming && (
-              <div className="chat-line assistant">
-                <span className="chat-line-role">助手</span>
-                <div className="chat-line-body streaming-cursor">{streaming}</div>
-              </div>
+              <article className="codex-msg assistant">
+                <header>助手</header>
+                <div className="codex-msg-body streaming-cursor">{streaming}</div>
+              </article>
             )}
           </div>
 
-          <div className="ai-pet-composer large">
-            <input
+          <footer className="ai-codex-composer">
+            <textarea
+              rows={2}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && void handleSend()}
-              placeholder="输入问题，Enter 发送…"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  void handleSend()
+                }
+              }}
+              placeholder="输入消息… Enter 发送，Shift+Enter 换行"
               disabled={sending}
             />
-            <button type="button" className="send-fab mini" onClick={() => void handleSend()} disabled={sending || !input.trim()}>
+            <button type="button" className="codex-send-btn" onClick={() => void handleSend()} disabled={sending || !input.trim()}>
               <Send size={16} />
+              发送
             </button>
-          </div>
+          </footer>
         </div>
       )}
 

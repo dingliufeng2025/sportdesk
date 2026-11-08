@@ -1,7 +1,7 @@
-import type { CSSProperties } from 'react'
 import type { FixtureItem, FollowingItem } from '../types'
 import { nextMatchLine } from '../utils/following'
-import { getSportVisual, countdownToKickoff } from '../utils/sportVisuals'
+import { countdownToKickoff } from '../utils/sportVisuals'
+import { logoForFollowing } from '../utils/leagueLogos'
 import { Heart } from 'lucide-react'
 
 interface FollowingBoardProps {
@@ -21,7 +21,7 @@ export function FollowingBoard({ items, allFixtures }: FollowingBoardProps) {
       </header>
       <div className="following-grid compact">
         {items.map((item) => {
-          const visual = getSportVisual(item.sport)
+          const logoSrc = logoForFollowing(item.id, item.name)
           const nextFx = findNextFixture(item, allFixtures)
           const line = nextMatchLine(item, allFixtures)
           const countdown = nextFx?.status === 'scheduled' ? countdownToKickoff(nextFx.kickoff) : null
@@ -31,12 +31,9 @@ export function FollowingBoard({ items, allFixtures }: FollowingBoardProps) {
             <article
               key={item.id}
               className={`follow-tile ${live ? 'is-live' : ''}`}
-              style={{ '--card-glow': visual.glow } as CSSProperties}
               title={line ?? undefined}
             >
-              <span className="follow-tile-badge" style={{ background: visual.gradient }}>
-                {visual.emoji}
-              </span>
+              <img className="follow-tile-logo" src={logoSrc} alt="" width={28} height={28} />
               <span className="follow-tile-name">{item.name}</span>
               {live && (
                 <span className="follow-tile-tag live">

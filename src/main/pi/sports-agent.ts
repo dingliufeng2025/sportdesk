@@ -3,32 +3,35 @@ import type { Model } from '@earendil-works/pi-ai/compat'
 import { getFixtures, getFollowing, getNews, getStandings } from '../adapters/fake-adapters'
 import { loadConfig, saveConfig } from '../config-manager'
 import type { PiModelOption, PiModelState } from '../types'
+import { isProviderAuthConfigured, readAuthJsonProviders, resolvePiAgentDir } from './pi-auth'
+
+type PiRuntime = {
+  getModels: (provider?: string) => readonly Model<any>[]
+  getModel: (provider: string, modelId: string) => Model<any> | undefined
+  hasConfiguredAuth: (provider: string) => boolean
+}
 
 type AgentSession = {
   dispose: () => void
   prompt: (msg: string) => Promise<void>
   subscribe?: (cb: (e: unknown) => void) => void
   model?: Model<any>
-  modelRuntime?: {
-    getModels: () => readonly Model<any>[]
-    getModel: (provider: string, modelId: string) => Model<any> | undefined
-    hasConfiguredAuth: (provider: string) => boolean
-  }
+  modelRuntime?: PiRuntime
   setModel?: (model: Model<any>, options?: { persist?: boolean }) => Promise<void>
 }
 
 let agentSession: AgentSession | null = null
 let piMode: 'sdk' | 'stub' = 'stub'
 let initError: string | undefined
-let catalogRuntime: AgentSession['modelRuntime'] | null = null
+let catalogRuntime: PiRuntime | null = null
 
-/** Stub 模式下仍展示的典型模型占位（与 Pi catalog 命名对齐） */
-const STUB_MODEL_CATALOG: PiModelOption[] = [
-  { provider: 'anthropic', modelId: 'claude-sonnet-4-5', displayName: 'anthropic / claude-sonnet-4-5', authConfigured: false },
-  { provider: 'anthropic', modelId: 'claude-opus-4-5', displayName: 'anthropic / claude-opus-4-5', authConfigured: false },
-  { provider: 'openai', modelId: 'gpt-4.1', displayName: 'openai / gpt-4.1', authConfigured: false },
-  { provider: 'openai', modelId: 'gpt-5.2', displayName: 'openai / gpt-5.2', authConfigured: false },
-  { provider: 'google', modelId: 'gemini-2.5-pro', displayName: 'google / gemini-2.5-pro', authConfigured: false }
+/** 常用占位模型（含 DeepSeek），在 catalog 截断时保证仍可选 */
+const SUPPLEMENTAL_CATALOG: Array<{ provider: string; modelId: string }> = [
+  { provider: 'deepseek', modelId: 'deepseek-flash' },
+  { provider: 'deepseek', modelId: 'deepseek-v4-pro' },
+  { provider: 'anthropic', modelId: 'claude-sonnet-4-5' },
+  { provider: 'openai', modelId: 'gpt-4.1' },
+  { provider: 'google', modelId: 'gemini-2.5-pro' }
 ]
 
 /**
@@ -60,7 +63,7 @@ function stubReply(userText: string, modelLabel: string): string {
     return `【Stub】积分榜占位数据已加载：${JSON.stringify(getStandings()).slice(0, 200)}…`
   }
   return (
-    `【SportDesk · Stub】当前模型偏好：${modelLabel}（未配置 Pi 凭据，回复为本地演示）。\n` +
+    `【SportDesk · Stub】当前模型偏好：${modelLabel}（会话未连上 Pi 或凭据未生效时仅为本地演示）。\n` +
     '试试：「今天的赛程」「我的关注」「新闻摘要」。\n' +
     `你的问题：${userText}`
   )
@@ -74,26 +77,41 @@ function configuredModelLabel(): string {
   if (cfg.aiModel?.provider && cfg.aiModel?.modelId) {
     return `${cfg.aiModel.provider}/${cfg.aiModel.modelId}`
   }
-  return 'stub-default'
+  return 'deepseek/deepseek-flash'
 }
 
 /**
  * 解析 createAgentSession 使用的初始模型。
  */
-async function resolveInitialModel(
-  runtime: NonNullable<AgentSession['modelRuntime']>
-): Promise<Model<any> | undefined> {
+function resolveInitialModel(runtime: PiRuntime): Model<any> | undefined {
   const cfg = loadConfig()
   if (!cfg.aiModel?.provider || !cfg.aiModel?.modelId) {
-    return undefined
+    return runtime.getModel('deepseek', 'deepseek-flash')
   }
   return runtime.getModel(cfg.aiModel.provider, cfg.aiModel.modelId)
 }
 
 /**
- * 懒加载仅用于模型目录的 ModelRuntime（会话未创建时）。
+ * 创建与 Pi CLI 一致的 ModelRuntime（读取 ~/.pi/agent/auth.json）。
  */
-async function ensureCatalogRuntime(): Promise<AgentSession['modelRuntime'] | null> {
+async function createPiRuntime(): Promise<PiRuntime | null> {
+  try {
+    const pi = await import('@earendil-works/pi-coding-agent')
+    const agentDir = resolvePiAgentDir()
+    const runtime = await pi.ModelRuntime.create({
+      refreshOnCreate: false,
+      authPath: `${agentDir}/auth.json`
+    })
+    return runtime
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 懒加载模型目录运行时。
+ */
+async function ensureCatalogRuntime(): Promise<PiRuntime | null> {
   if (catalogRuntime) {
     return catalogRuntime
   }
@@ -101,26 +119,72 @@ async function ensureCatalogRuntime(): Promise<AgentSession['modelRuntime'] | nu
     catalogRuntime = agentSession.modelRuntime
     return catalogRuntime
   }
-  try {
-    const pi = await import('@earendil-works/pi-coding-agent')
-    const runtime = await pi.ModelRuntime.create({ refreshOnCreate: false })
-    catalogRuntime = runtime
-    return catalogRuntime
-  } catch {
-    return null
+  catalogRuntime = await createPiRuntime()
+  return catalogRuntime
+}
+
+/**
+ * 映射单个模型为下拉选项。
+ */
+function toOption(runtime: PiRuntime, m: Model<any>): PiModelOption {
+  return {
+    provider: m.provider,
+    modelId: m.id,
+    displayName: `${m.provider} / ${m.id}`,
+    authConfigured: isProviderAuthConfigured(m.provider, (p) => runtime.hasConfiguredAuth(p))
   }
 }
 
 /**
- * 将 ModelRuntime 中的模型映射为 UI 选项。
+ * 合并目录：已配置 provider 优先，并确保 DeepSeek / 用户配置模型不丢失。
  */
-function mapRuntimeModels(runtime: NonNullable<AgentSession['modelRuntime']>): PiModelOption[] {
-  return runtime.getModels().map((m) => ({
-    provider: m.provider,
-    modelId: m.id,
-    displayName: `${m.provider} / ${m.id}`,
-    authConfigured: runtime.hasConfiguredAuth(m.provider)
-  }))
+function buildModelCatalog(runtime: PiRuntime): PiModelOption[] {
+  const cfg = loadConfig()
+  const authProviders = readAuthJsonProviders()
+  if (cfg.aiModel?.provider) {
+    authProviders.add(cfg.aiModel.provider)
+  }
+
+  const all = runtime.getModels().map((m) => toOption(runtime, m))
+  const byKey = new Map<string, PiModelOption>()
+  for (const opt of all) {
+    byKey.set(`${opt.provider}::${opt.modelId}`, opt)
+  }
+
+  for (const extra of SUPPLEMENTAL_CATALOG) {
+    const key = `${extra.provider}::${extra.modelId}`
+    if (byKey.has(key)) {
+      continue
+    }
+    const model = runtime.getModel(extra.provider, extra.modelId)
+    if (model) {
+      byKey.set(key, toOption(runtime, model))
+    } else {
+      byKey.set(key, {
+        provider: extra.provider,
+        modelId: extra.modelId,
+        displayName: `${extra.provider} / ${extra.modelId}`,
+        authConfigured: isProviderAuthConfigured(extra.provider, (p) => runtime.hasConfiguredAuth(p))
+      })
+    }
+  }
+
+  const sorted = [...byKey.values()].sort((a, b) => {
+    const aPri = authProviders.has(a.provider) ? 0 : 1
+    const bPri = authProviders.has(b.provider) ? 0 : 1
+    if (aPri !== bPri) {
+      return aPri - bPri
+    }
+    if (a.provider === 'deepseek' && b.provider !== 'deepseek') {
+      return -1
+    }
+    if (b.provider === 'deepseek' && a.provider !== 'deepseek') {
+      return 1
+    }
+    return a.displayName.localeCompare(b.displayName)
+  })
+
+  return sorted
 }
 
 /**
@@ -130,6 +194,7 @@ async function tryInitPiSession(win: BrowserWindow): Promise<boolean> {
   try {
     const pi = await import('@earendil-works/pi-coding-agent')
     const { createAgentSession, SessionManager, SettingsManager } = pi
+    const agentDir = resolvePiAgentDir()
 
     const customTools = [
       {
@@ -159,6 +224,7 @@ async function tryInitPiSession(win: BrowserWindow): Promise<boolean> {
     ]
 
     const bootstrap = await createAgentSession({
+      agentDir,
       sessionManager: SessionManager.inMemory(),
       settingsManager: SettingsManager.inMemory(),
       tools: [],
@@ -169,16 +235,23 @@ async function tryInitPiSession(win: BrowserWindow): Promise<boolean> {
 
     const { session } = bootstrap
     agentSession = session as AgentSession
-    catalogRuntime = session.modelRuntime
+    catalogRuntime = session.modelRuntime ?? null
     piMode = 'sdk'
 
-    const initial = await resolveInitialModel(session.modelRuntime)
-    if (initial && session.setModel) {
-      try {
-        await session.setModel(initial, { persist: false })
-      } catch (modelErr) {
-        initError =
-          modelErr instanceof Error ? modelErr.message : String(modelErr)
+    const runtime = session.modelRuntime
+    if (runtime) {
+      const initial = resolveInitialModel(runtime)
+      if (initial && session.setModel) {
+        const authed = isProviderAuthConfigured(initial.provider, (p) => runtime.hasConfiguredAuth(p))
+        if (!authed) {
+          initError = `提供商 ${initial.provider} 未检测到凭据（auth.json 或环境变量）`
+        } else {
+          try {
+            await session.setModel(initial, { persist: false })
+          } catch (modelErr) {
+            initError = modelErr instanceof Error ? modelErr.message : String(modelErr)
+          }
+        }
       }
     }
 
@@ -208,7 +281,7 @@ async function tryInitPiSession(win: BrowserWindow): Promise<boolean> {
  */
 export async function initSportsAgent(win: BrowserWindow): Promise<{ mode: string; error?: string }> {
   const ok = await tryInitPiSession(win)
-  return { mode: ok ? 'sdk' : 'stub', error: ok ? undefined : initError }
+  return { mode: ok ? 'sdk' : 'stub', error: ok ? initError : initError }
 }
 
 /**
@@ -217,7 +290,14 @@ export async function initSportsAgent(win: BrowserWindow): Promise<{ mode: strin
 export async function sendSportsAgentMessage(win: BrowserWindow, text: string): Promise<void> {
   emitPiEvent(win, { type: 'user', text })
 
-  if (piMode === 'sdk' && agentSession) {
+  const cfg = loadConfig()
+  const preferSdk =
+    piMode === 'sdk' &&
+    agentSession &&
+    cfg.aiModel?.provider &&
+    isProviderAuthConfigured(cfg.aiModel.provider, (p) => agentSession?.modelRuntime?.hasConfiguredAuth(p) ?? false)
+
+  if (preferSdk && agentSession) {
     try {
       await agentSession.prompt(text)
       emitPiEvent(win, { type: 'done' })
@@ -227,6 +307,8 @@ export async function sendSportsAgentMessage(win: BrowserWindow, text: string): 
         type: 'error',
         message: err instanceof Error ? err.message : String(err)
       })
+      emitPiEvent(win, { type: 'done' })
+      return
     }
   }
 
@@ -247,15 +329,19 @@ export function getPiMode(): { mode: string; initError?: string } {
 }
 
 /**
- * 列出 Pi SDK 模型目录；Stub 时返回占位 + 静态 catalog（若可加载）。
+ * 列出 Pi SDK 模型目录；合并 DeepSeek 与已配置 provider。
  */
 export async function listPiModels(): Promise<PiModelOption[]> {
   const runtime = await ensureCatalogRuntime()
-  if (runtime && runtime.getModels().length > 0) {
-    const mapped = mapRuntimeModels(runtime)
-    return mapped.length > 0 ? mapped.slice(0, 80) : STUB_MODEL_CATALOG
+  if (runtime) {
+    return buildModelCatalog(runtime)
   }
-  return STUB_MODEL_CATALOG
+  return SUPPLEMENTAL_CATALOG.map((m) => ({
+    provider: m.provider,
+    modelId: m.modelId,
+    displayName: `${m.provider} / ${m.modelId}`,
+    authConfigured: isProviderAuthConfigured(m.provider)
+  }))
 }
 
 /**
@@ -270,7 +356,7 @@ export function getPiModelState(): PiModelState {
   const fromConfig =
     cfg.aiModel?.provider && cfg.aiModel?.modelId
       ? { provider: cfg.aiModel.provider, modelId: cfg.aiModel.modelId }
-      : { provider: 'anthropic', modelId: 'claude-sonnet-4-5' }
+      : { provider: 'deepseek', modelId: 'deepseek-flash' }
   return {
     provider: fromSession?.provider ?? fromConfig.provider,
     modelId: fromSession?.modelId ?? fromConfig.modelId,
@@ -289,20 +375,26 @@ export async function setPiModel(
   cfg.aiModel = { provider, modelId }
   saveConfig(cfg)
 
+  const authed = isProviderAuthConfigured(provider, (p) => agentSession?.modelRuntime?.hasConfiguredAuth(p) ?? false)
   if (piMode !== 'sdk' || !agentSession?.setModel || !agentSession.modelRuntime) {
-    return { ok: true, stubOnly: true }
+    return {
+      ok: true,
+      stubOnly: !authed,
+      error: authed ? 'Pi 会话未就绪，已保存模型偏好' : '未检测到凭据，仍将使用 Stub 回复'
+    }
   }
 
   const model = agentSession.modelRuntime.getModel(provider, modelId)
   if (!model) {
     return { ok: false, error: `未找到模型 ${provider}/${modelId}` }
   }
-  if (!agentSession.modelRuntime.hasConfiguredAuth(provider)) {
+  if (!authed) {
     return { ok: true, stubOnly: true, error: '该提供商未配置 API 凭据，仍将使用 Stub 回复' }
   }
 
   try {
     await agentSession.setModel(model, { persist: false })
+    initError = undefined
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }

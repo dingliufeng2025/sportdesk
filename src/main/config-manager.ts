@@ -12,8 +12,8 @@ const DEFAULT_CONFIG: SportDeskConfig = {
   digestTime: '08:00',
   timezone: 'Asia/Shanghai',
   aiModel: {
-    provider: 'anthropic',
-    modelId: 'claude-sonnet-4-5'
+    provider: 'deepseek',
+    modelId: 'deepseek-flash'
   }
 }
 

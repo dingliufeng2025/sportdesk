@@ -1,6 +1,7 @@
 import { FileText } from 'lucide-react'
 import type { NewsItem, FixtureItem } from '../types'
-import { getSportVisual, moodFromSummary } from '../utils/sportVisuals'
+import { moodFromSummary } from '../utils/sportVisuals'
+import { logoForSportFilter } from '../utils/leagueLogos'
 
 interface SmartBriefPanelProps {
   news: NewsItem[]
@@ -26,14 +27,12 @@ export function SmartBriefPanel({ news, finished, finishedTitle }: SmartBriefPan
 
       <div className="brief-cards static">
         {news.slice(0, 3).map((n) => {
-          const visual = getSportVisual(n.sport)
-          const mood = moodFromSummary(n.summary)
+            const mood = moodFromSummary(n.summary)
+            const logo = logoForSportFilter(n.sport)
           return (
             <article key={n.id} className="brief-card compact">
               <div className="brief-card-top">
-                <span className="team-badge small" style={{ background: visual.gradient }} title={visual.label}>
-                  {visual.emoji}
-                </span>
+                <img className="team-badge-img" src={logo} alt="" width={22} height={22} />
                 <span className={`mood-pill ${mood.className}`}>{mood.label}</span>
               </div>
               <h3 className="brief-card-title clamp">{n.title}</h3>

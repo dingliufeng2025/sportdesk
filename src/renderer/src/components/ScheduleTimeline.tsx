@@ -1,5 +1,5 @@
 import type { FixtureItem } from '../types'
-import { getSportVisual } from '../utils/sportVisuals'
+import { logoForLeagueName } from '../utils/leagueLogos'
 import { CalendarDays } from 'lucide-react'
 
 interface ScheduleTimelineProps {
@@ -51,7 +51,7 @@ export function ScheduleTimeline({ fixtures, dayLabel }: ScheduleTimelineProps) 
 }
 
 function FixtureCard({ fixture: f }: { fixture: FixtureItem }) {
-  const visual = getSportVisual(f.sport)
+  const leagueLogo = logoForLeagueName(f.league)
   const isLive = f.status === 'live'
   const isFinished = f.status === 'finished'
 
@@ -59,9 +59,7 @@ function FixtureCard({ fixture: f }: { fixture: FixtureItem }) {
     <article className={`fixture-viz-card ${isLive ? 'live' : ''} ${isFinished ? 'done' : ''}`}>
       <div className="fixture-card-time">{formatTime(f.kickoff)}</div>
       <div className="fixture-league-row">
-        <span className="mini-badge" style={{ background: visual.gradient }}>
-          {visual.emoji}
-        </span>
+        <img className="mini-league-logo" src={leagueLogo} alt="" width={20} height={20} />
         <span className="fixture-league-name">{f.league}</span>
       </div>
       <div className="fixture-match-block">

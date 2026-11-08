@@ -1,5 +1,6 @@
 import { RefreshCw, Settings, Sparkles, Layers } from 'lucide-react'
 import type { SportFilter } from '../types'
+import { logoForSportFilter } from '../utils/leagueLogos'
 
 /** 运动上下文筛选（工作台辅助，非门户 Tab 墙） */
 const SPORT_CHIPS: { value: SportFilter; label: string }[] = [
@@ -12,6 +13,11 @@ const SPORT_CHIPS: { value: SportFilter; label: string }[] = [
   { value: 'lol', label: '电竞' },
   { value: 'honor', label: '王者' }
 ]
+
+/** 筛选项带本地合规 Logo（Wikimedia / 自建占位） */
+function ChipIcon({ filter }: { filter: SportFilter }) {
+  return <img className="filter-chip-logo" src={logoForSportFilter(filter)} alt="" width={16} height={16} />
+}
 
 const DATE_TABS: { offset: number; label: string }[] = [
   { offset: 0, label: '今日' },
@@ -64,6 +70,7 @@ export function TopBar({
               className={sportFilter === chip.value ? 'filter-chip active' : 'filter-chip'}
               onClick={() => onSportFilterChange(chip.value)}
             >
+              <ChipIcon filter={chip.value} />
               {chip.label}
             </button>
           ))}
