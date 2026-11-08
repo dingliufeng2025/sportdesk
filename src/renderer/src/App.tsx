@@ -3,13 +3,13 @@ import { TopBar } from './components/TopBar'
 import { FollowingBoard } from './components/FollowingBoard'
 import { ScheduleTimeline } from './components/ScheduleTimeline'
 import { SmartBriefPanel } from './components/SmartBriefPanel'
-import { AiWorkbench } from './components/AiWorkbench'
+import { AiFloatingPet } from './components/AiFloatingPet'
 import { SettingsModal } from './components/SettingsModal'
 import { DigestModal } from './components/DigestModal'
 import type { SportFilter, FixtureItem, NewsItem, FollowingItem } from './types'
 
 /**
- * SportDesk 主界面：AI 对话为核心的工作台布局（非门户式赛程墙）。
+ * SportDesk 主界面：内容居中展示，AI 为角落悬浮助手。
  */
 export default function App() {
   const [dayOffset, setDayOffset] = useState(0)
@@ -95,17 +95,10 @@ export default function App() {
       />
       <main className="workbench-grid">
         <FollowingBoard items={following} allFixtures={allDayFixtures} />
-        <div className="workbench-center-column">
-          <AiWorkbench
-            piMode={piMode}
-            initError={piError}
-            following={following}
-            onOpenDigest={() => setDigestOpen(true)}
-          />
-          <ScheduleTimeline fixtures={timeline} dayLabel={dayLabel} />
-        </div>
+        <ScheduleTimeline fixtures={timeline} dayLabel={dayLabel} />
         <SmartBriefPanel news={news} finished={finished} finishedTitle={finishedTitle} />
       </main>
+      <AiFloatingPet piMode={piMode} initError={piError} following={following} />
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <DigestModal open={digestOpen} onClose={() => setDigestOpen(false)} />
     </div>

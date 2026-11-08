@@ -37,10 +37,12 @@ export function ScheduleTimeline({ fixtures, dayLabel }: ScheduleTimelineProps) 
               />
             ))}
           </div>
-          <div className="fixture-card-row">
-            {fixtures.map((f) => (
-              <FixtureCard key={f.id} fixture={f} />
-            ))}
+          <div className="schedule-scroll-zone">
+            <div className="fixture-card-row">
+              {fixtures.map((f) => (
+                <FixtureCard key={f.id} fixture={f} />
+              ))}
+            </div>
           </div>
         </div>
       )}
