@@ -18,7 +18,8 @@ function createWindow(): void {
     title: 'SportDesk',
     backgroundColor: '#0f1117',
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
+      // electron-vite 在 package.json type=module 时输出 preload 为 index.mjs（非 index.js）
+      preload: join(__dirname, '../preload/index.mjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false
