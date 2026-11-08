@@ -3,8 +3,11 @@ import { loadConfig, saveConfig } from './config-manager'
 import { loadSecrets, saveSecrets, getSecretsStatus } from './secrets-manager'
 import {
   getFixtures,
+  getTimelineFixtures,
+  getFinishedFixtures,
   getNews,
   getFollowing,
+  getStandings,
   refreshAllData,
   generateDailyDigest
 } from './adapters/fake-adapters'
@@ -29,9 +32,19 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
     return loadConfig()
   })
 
-  ipcMain.handle('data:fixtures', (_e, filter: SportFilter, mode: 'today' | 'week') =>
-    getFixtures(filter, mode)
+  ipcMain.handle('data:fixtures', (_e, filter: SportFilter, dayOffset: number) =>
+    getFixtures(filter, dayOffset ?? 0)
   )
+
+  ipcMain.handle('data:timeline', (_e, filter: SportFilter, dayOffset: number) =>
+    getTimelineFixtures(filter, dayOffset ?? 0)
+  )
+
+  ipcMain.handle('data:finished', (_e, filter: SportFilter, dayOffset: number) =>
+    getFinishedFixtures(filter, dayOffset ?? 0)
+  )
+
+  ipcMain.handle('data:standings', () => getStandings())
 
   ipcMain.handle('data:news', (_e, filter: SportFilter) => getNews(filter))
 

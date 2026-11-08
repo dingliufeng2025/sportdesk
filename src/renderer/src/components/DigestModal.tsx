@@ -59,7 +59,7 @@ export function DigestModal({ open, onClose }: DigestModalProps) {
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ margin: 0, fontSize: 18 }}>每日简报</h2>
+          <h2 style={{ margin: 0, fontSize: 18 }}>每日日报</h2>
           <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text)' }}>
             <X size={20} />
           </button>

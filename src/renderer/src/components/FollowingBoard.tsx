@@ -1,59 +1,47 @@
-import type { FollowingItem } from '../types'
+import type { FixtureItem, FollowingItem } from '../types'
+import { nextMatchLine } from '../utils/following'
 import { ExternalLink } from 'lucide-react'
 
 interface FollowingBoardProps {
   items: FollowingItem[]
+  allFixtures: FixtureItem[]
 }
 
 /**
- * 左侧关注看板。
+ * 左侧窄栏：关注卡片与下一场一句话。
  */
-export function FollowingBoard({ items }: FollowingBoardProps) {
+export function FollowingBoard({ items, allFixtures }: FollowingBoardProps) {
   return (
-    <aside className="panel">
+    <aside className="panel panel-follow">
       <div className="panel-header">我的关注</div>
-      <div className="panel-body" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {items.map((item) => (
-          <div
-            key={item.id}
-            style={{
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border)',
-              borderRadius: 8,
-              padding: 10
-            }}
-          >
-            <div style={{ fontWeight: 600, fontSize: 14 }}>{item.name}</div>
-            {item.meta && (
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{item.meta}</div>
-            )}
-            {item.type === 'note' && item.sport === 'honor' && (
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
-                无实时比分 · 仅备注与外链
-              </div>
-            )}
-            {item.externalUrl && (
-              <button
-                type="button"
-                onClick={() => window.sportdesk.openExternal(item.externalUrl!)}
-                style={{
-                  marginTop: 8,
-                  fontSize: 12,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 4,
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'var(--accent)',
-                  padding: 0
-                }}
-              >
-                <ExternalLink size={12} />
-                打开官网
-              </button>
-            )}
-          </div>
-        ))}
+      <div className="panel-body follow-list">
+        {items.map((item) => {
+          const line = nextMatchLine(item, allFixtures)
+          return (
+            <div key={item.id} className="follow-card">
+              <div className="follow-name">{item.name}</div>
+              {item.meta && <div className="follow-meta">{item.meta}</div>}
+              {item.type === 'note' && item.sport === 'honor' && (
+                <div className="follow-note">无实时比分 · 仅备注与外链</div>
+              )}
+              {line ? (
+                <div className="follow-next">{line}</div>
+              ) : (
+                <div className="follow-next muted">近期无匹配赛程</div>
+              )}
+              {item.externalUrl && (
+                <button
+                  type="button"
+                  className="follow-link"
+                  onClick={() => window.sportdesk.openExternal(item.externalUrl!)}
+                >
+                  <ExternalLink size={12} />
+                  官网
+                </button>
+              )}
+            </div>
+          )
+        })}
       </div>
     </aside>
   )

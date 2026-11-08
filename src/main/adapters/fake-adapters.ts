@@ -41,28 +41,67 @@ export function seedCacheIfNeeded(): void {
 }
 
 /**
- * 从缓存或内存样本读取赛程。
+ * 判断开赛时间是否落在「今天 + dayOffset」的自然日（本地时区）。
  */
-export function getFixtures(filter: SportFilter = 'all', mode: 'today' | 'week' = 'today'): FixtureItem[] {
+function isKickoffOnOffsetDay(iso: string, dayOffset: number): boolean {
+  const kickoff = new Date(iso)
+  const target = new Date()
+  target.setHours(0, 0, 0, 0)
+  target.setDate(target.getDate() + dayOffset)
+  const end = new Date(target)
+  end.setDate(end.getDate() + 1)
+  return kickoff >= target && kickoff < end
+}
+
+function loadAllFixtures(): FixtureItem[] {
   seedCacheIfNeeded()
   const path = join(SportDeskPaths.cache(), CACHE_FILES.fixtures)
-  let items: FixtureItem[] = sampleFixtures
   if (existsSync(path)) {
-    items = JSON.parse(readFileSync(path, 'utf-8')) as FixtureItem[]
+    return JSON.parse(readFileSync(path, 'utf-8')) as FixtureItem[]
   }
-  const filtered =
-    filter === 'all' ? items : items.filter((f) => f.sport === filter)
-  const sorted = [...filtered].sort((a, b) => {
+  return sampleFixtures
+}
+
+function sortTimeline(items: FixtureItem[]): FixtureItem[] {
+  return [...items].sort((a, b) => {
     const order = { live: 0, scheduled: 1, finished: 2 }
     if (order[a.status] !== order[b.status]) {
       return order[a.status] - order[b.status]
     }
     return a.kickoff.localeCompare(b.kickoff)
   })
-  if (mode === 'today') {
-    return sorted.slice(0, 12)
+}
+
+/**
+ * 从缓存或内存样本读取赛程（按运动筛选 + 日期偏移 0=今日 1=明日 2=后天）。
+ */
+export function getFixtures(filter: SportFilter = 'all', dayOffset = 0): FixtureItem[] {
+  let items = loadAllFixtures()
+  if (filter !== 'all') {
+    items = items.filter((f) => f.sport === filter)
   }
-  return sorted
+  items = items.filter((f) => isKickoffOnOffsetDay(f.kickoff, dayOffset))
+  return sortTimeline(items)
+}
+
+/**
+ * 赛程时间线：不含已结束场次（完场在侧栏展示）。
+ */
+export function getTimelineFixtures(filter: SportFilter = 'all', dayOffset = 0): FixtureItem[] {
+  return getFixtures(filter, dayOffset).filter((f) => f.status !== 'finished')
+}
+
+/**
+ * 指定日期的完场比赛（侧栏摘要）。
+ */
+export function getFinishedFixtures(filter: SportFilter = 'all', dayOffset = 0): FixtureItem[] {
+  let items = loadAllFixtures().filter((f) => f.status === 'finished')
+  if (filter !== 'all') {
+    items = items.filter((f) => f.sport === filter)
+  }
+  return items
+    .filter((f) => isKickoffOnOffsetDay(f.kickoff, dayOffset))
+    .sort((a, b) => b.kickoff.localeCompare(a.kickoff))
 }
 
 /**
@@ -113,7 +152,7 @@ export function refreshAllData(): { fixtures: FixtureItem[]; news: NewsItem[] } 
  * 生成每日简报（P0 假数据）。
  */
 export function generateDailyDigest(): { generatedAt: string; sections: { title: string; items: string[] }[] } {
-  const fixtures = getFixtures('all', 'today')
+  const fixtures = getFixtures('all', 0)
   const live = fixtures.filter((f) => f.status === 'live')
   return {
     generatedAt: new Date().toISOString(),

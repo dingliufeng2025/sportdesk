@@ -1,38 +1,67 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { TopBar } from './components/TopBar'
 import { FollowingBoard } from './components/FollowingBoard'
-import { FixturesPanel } from './components/FixturesPanel'
-import { NewsPanel } from './components/NewsPanel'
-import { AiChatPanel } from './components/AiChatPanel'
+import { ScheduleTimeline } from './components/ScheduleTimeline'
+import { RightSidebar } from './components/RightSidebar'
+import { AiChatDrawer } from './components/AiChatDrawer'
 import { SettingsModal } from './components/SettingsModal'
 import { DigestModal } from './components/DigestModal'
 import type { SportFilter, FixtureItem, NewsItem, FollowingItem } from './types'
 
+interface StandingRow {
+  league: string
+  team: string
+  played: number
+  points: number
+}
+
 /**
- * SportDesk 主界面：五区块布局 + 弹窗。
+ * SportDesk 主界面：赛程时间线优先的三栏布局。
  */
 export default function App() {
-  const [timeMode, setTimeMode] = useState<'today' | 'week'>('today')
+  const [dayOffset, setDayOffset] = useState(0)
   const [sportFilter, setSportFilter] = useState<SportFilter>('all')
-  const [fixtures, setFixtures] = useState<FixtureItem[]>([])
+  const [timeline, setTimeline] = useState<FixtureItem[]>([])
+  const [allDayFixtures, setAllDayFixtures] = useState<FixtureItem[]>([])
+  const [finished, setFinished] = useState<FixtureItem[]>([])
   const [news, setNews] = useState<NewsItem[]>([])
   const [following, setFollowing] = useState<FollowingItem[]>([])
+  const [standings, setStandings] = useState<StandingRow[]>([])
   const [refreshing, setRefreshing] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [digestOpen, setDigestOpen] = useState(false)
   const [piMode, setPiMode] = useState('stub')
   const [piError, setPiError] = useState<string>()
 
+  const dayLabel = useMemo(() => {
+    if (dayOffset === 0) {
+      return '今日'
+    }
+    if (dayOffset === 1) {
+      return '明日'
+    }
+    if (dayOffset === 2) {
+      return '后天'
+    }
+    return '当日'
+  }, [dayOffset])
+
   const loadData = useCallback(async () => {
-    const [fx, nw, fl] = await Promise.all([
-      window.sportdesk.getFixtures(sportFilter, timeMode),
+    const [tl, allFx, fin, nw, fl, st] = await Promise.all([
+      window.sportdesk.getTimeline(sportFilter, dayOffset),
+      window.sportdesk.getFixtures('all', dayOffset),
+      window.sportdesk.getFinished(sportFilter, dayOffset),
       window.sportdesk.getNews(sportFilter),
-      window.sportdesk.getFollowing()
+      window.sportdesk.getFollowing(),
+      window.sportdesk.getStandings()
     ])
-    setFixtures(fx)
+    setTimeline(tl)
+    setAllDayFixtures(allFx)
+    setFinished(fin)
     setNews(nw)
     setFollowing(fl)
-  }, [sportFilter, timeMode])
+    setStandings(Array.isArray(st) ? (st as StandingRow[]) : [])
+  }, [sportFilter, dayOffset])
 
   useEffect(() => {
     void loadData()
@@ -59,11 +88,13 @@ export default function App() {
     }
   }
 
+  const finishedTitle = dayOffset === 0 ? '今日完场' : `${dayLabel}完场`
+
   return (
     <div className="app-shell">
       <TopBar
-        timeMode={timeMode}
-        onTimeModeChange={setTimeMode}
+        dayOffset={dayOffset}
+        onDayOffsetChange={setDayOffset}
         sportFilter={sportFilter}
         onSportFilterChange={setSportFilter}
         onRefresh={handleRefresh}
@@ -71,12 +102,17 @@ export default function App() {
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenDigest={() => setDigestOpen(true)}
       />
-      <div className="main-grid">
-        <FollowingBoard items={following} />
-        <FixturesPanel fixtures={fixtures} />
-        <NewsPanel news={news} />
+      <div className="home-layout">
+        <FollowingBoard items={following} allFixtures={allDayFixtures} />
+        <ScheduleTimeline fixtures={timeline} dayLabel={dayLabel} />
+        <RightSidebar
+          finished={finished}
+          news={news}
+          standings={standings}
+          finishedTitle={finishedTitle}
+        />
       </div>
-      <AiChatPanel piMode={piMode} initError={piError} />
+      <AiChatDrawer piMode={piMode} initError={piError} />
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <DigestModal open={digestOpen} onClose={() => setDigestOpen(false)} />
     </div>
