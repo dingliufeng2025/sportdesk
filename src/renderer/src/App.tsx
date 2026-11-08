@@ -2,21 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { TopBar } from './components/TopBar'
 import { FollowingBoard } from './components/FollowingBoard'
 import { ScheduleTimeline } from './components/ScheduleTimeline'
-import { RightSidebar } from './components/RightSidebar'
-import { AiChatDrawer } from './components/AiChatDrawer'
+import { SmartBriefPanel } from './components/SmartBriefPanel'
+import { AiFloatingPet } from './components/AiFloatingPet'
 import { SettingsModal } from './components/SettingsModal'
 import { DigestModal } from './components/DigestModal'
 import type { SportFilter, FixtureItem, NewsItem, FollowingItem } from './types'
 
-interface StandingRow {
-  league: string
-  team: string
-  played: number
-  points: number
-}
-
 /**
- * SportDesk 主界面：赛程时间线优先的三栏布局。
+ * SportDesk 主界面：内容居中展示，AI 为角落悬浮助手。
  */
 export default function App() {
   const [dayOffset, setDayOffset] = useState(0)
@@ -26,7 +19,6 @@ export default function App() {
   const [finished, setFinished] = useState<FixtureItem[]>([])
   const [news, setNews] = useState<NewsItem[]>([])
   const [following, setFollowing] = useState<FollowingItem[]>([])
-  const [standings, setStandings] = useState<StandingRow[]>([])
   const [refreshing, setRefreshing] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [digestOpen, setDigestOpen] = useState(false)
@@ -47,20 +39,18 @@ export default function App() {
   }, [dayOffset])
 
   const loadData = useCallback(async () => {
-    const [tl, allFx, fin, nw, fl, st] = await Promise.all([
+    const [tl, allFx, fin, nw, fl] = await Promise.all([
       window.sportdesk.getTimeline(sportFilter, dayOffset),
       window.sportdesk.getFixtures('all', dayOffset),
       window.sportdesk.getFinished(sportFilter, dayOffset),
       window.sportdesk.getNews(sportFilter),
-      window.sportdesk.getFollowing(),
-      window.sportdesk.getStandings()
+      window.sportdesk.getFollowing()
     ])
     setTimeline(tl)
     setAllDayFixtures(allFx)
     setFinished(fin)
     setNews(nw)
     setFollowing(fl)
-    setStandings(Array.isArray(st) ? (st as StandingRow[]) : [])
   }, [sportFilter, dayOffset])
 
   useEffect(() => {
@@ -91,7 +81,8 @@ export default function App() {
   const finishedTitle = dayOffset === 0 ? '今日完场' : `${dayLabel}完场`
 
   return (
-    <div className="app-shell">
+    <div className="workbench-shell">
+      <div className="workbench-bg" aria-hidden />
       <TopBar
         dayOffset={dayOffset}
         onDayOffsetChange={setDayOffset}
@@ -102,17 +93,12 @@ export default function App() {
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenDigest={() => setDigestOpen(true)}
       />
-      <div className="home-layout">
+      <main className="workbench-grid">
         <FollowingBoard items={following} allFixtures={allDayFixtures} />
         <ScheduleTimeline fixtures={timeline} dayLabel={dayLabel} />
-        <RightSidebar
-          finished={finished}
-          news={news}
-          standings={standings}
-          finishedTitle={finishedTitle}
-        />
-      </div>
-      <AiChatDrawer piMode={piMode} initError={piError} />
+        <SmartBriefPanel news={news} finished={finished} finishedTitle={finishedTitle} />
+      </main>
+      <AiFloatingPet piMode={piMode} initError={piError} following={following} />
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <DigestModal open={digestOpen} onClose={() => setDigestOpen(false)} />
     </div>

@@ -1,6 +1,8 @@
 import type { FixtureItem, FollowingItem } from '../types'
 import { nextMatchLine } from '../utils/following'
-import { ExternalLink } from 'lucide-react'
+import { countdownToKickoff } from '../utils/sportVisuals'
+import { logoForFollowing } from '../utils/leagueLogos'
+import { Heart } from 'lucide-react'
 
 interface FollowingBoardProps {
   items: FollowingItem[]
@@ -8,41 +10,49 @@ interface FollowingBoardProps {
 }
 
 /**
- * 左侧窄栏：关注卡片与下一场一句话。
+ * 关注看板：双列紧凑网格，一屏内展示、无独立滚动条。
  */
 export function FollowingBoard({ items, allFixtures }: FollowingBoardProps) {
   return (
-    <aside className="panel panel-follow">
-      <div className="panel-header">我的关注</div>
-      <div className="panel-body follow-list">
+    <aside className="following-rail glass-panel">
+      <header className="rail-head compact">
+        <Heart size={14} className="rail-head-icon" />
+        <h2>关注</h2>
+      </header>
+      <div className="following-grid compact">
         {items.map((item) => {
+          const logoSrc = logoForFollowing(item.id, item.name)
+          const nextFx = findNextFixture(item, allFixtures)
           const line = nextMatchLine(item, allFixtures)
+          const countdown = nextFx?.status === 'scheduled' ? countdownToKickoff(nextFx.kickoff) : null
+          const live = nextFx?.status === 'live'
+
           return (
-            <div key={item.id} className="follow-card">
-              <div className="follow-name">{item.name}</div>
-              {item.meta && <div className="follow-meta">{item.meta}</div>}
-              {item.type === 'note' && item.sport === 'honor' && (
-                <div className="follow-note">无实时比分 · 仅备注与外链</div>
+            <article
+              key={item.id}
+              className={`follow-tile ${live ? 'is-live' : ''}`}
+              title={line ?? undefined}
+            >
+              <img className="follow-tile-logo" src={logoSrc} alt="" width={28} height={28} />
+              <span className="follow-tile-name">{item.name}</span>
+              {live && (
+                <span className="follow-tile-tag live">
+                  <span className="pulse-dot" />
+                  直播
+                </span>
               )}
-              {line ? (
-                <div className="follow-next">{line}</div>
-              ) : (
-                <div className="follow-next muted">近期无匹配赛程</div>
-              )}
-              {item.externalUrl && (
-                <button
-                  type="button"
-                  className="follow-link"
-                  onClick={() => window.sportdesk.openExternal(item.externalUrl!)}
-                >
-                  <ExternalLink size={12} />
-                  官网
-                </button>
-              )}
-            </div>
+              {!live && countdown && <span className="follow-tile-tag">{countdown}</span>}
+            </article>
           )
         })}
       </div>
     </aside>
   )
+}
+
+function findNextFixture(item: FollowingItem, fixtures: FixtureItem[]): FixtureItem | undefined {
+  return fixtures
+    .filter((f) => f.status !== 'finished')
+    .filter((f) => Boolean(nextMatchLine(item, [f])))
+    .sort((a, b) => a.kickoff.localeCompare(b.kickoff))[0]
 }

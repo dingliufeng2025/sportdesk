@@ -1,5 +1,15 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { SportDeskConfig, SportFilter, FixtureItem, NewsItem, FollowingItem, SecretsStatus, DigestSection } from '../main/types'
+import type {
+  SportDeskConfig,
+  SportFilter,
+  FixtureItem,
+  NewsItem,
+  FollowingItem,
+  SecretsStatus,
+  DigestSection,
+  PiModelOption,
+  PiModelState
+} from '../main/types'
 
 export interface SportDeskApi {
   getPaths: () => Promise<{ home: string; config: string; cache: string }>
@@ -19,6 +29,9 @@ export interface SportDeskApi {
   initSession: () => Promise<{ mode: string; error?: string }>
   sendMessage: (text: string) => Promise<{ ok: boolean }>
   getPiMode: () => Promise<{ mode: string; initError?: string }>
+  listPiModels: () => Promise<PiModelOption[]>
+  getPiModelState: () => Promise<PiModelState>
+  setPiModel: (provider: string, modelId: string) => Promise<{ ok: boolean; stubOnly?: boolean; error?: string }>
   onPiEvent: (callback: (event: unknown) => void) => () => void
   openExternal: (url: string) => Promise<void>
 }
@@ -41,6 +54,9 @@ const api: SportDeskApi = {
   initSession: () => ipcRenderer.invoke('session:init'),
   sendMessage: (text) => ipcRenderer.invoke('session:send', text),
   getPiMode: () => ipcRenderer.invoke('pi:mode'),
+  listPiModels: () => ipcRenderer.invoke('session:list-models'),
+  getPiModelState: () => ipcRenderer.invoke('session:get-model'),
+  setPiModel: (provider, modelId) => ipcRenderer.invoke('session:set-model', provider, modelId),
   onPiEvent: (callback) => {
     const listener = (_: Electron.IpcRendererEvent, data: unknown) => callback(data)
     ipcRenderer.on('pi:event', listener)
