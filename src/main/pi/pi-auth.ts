@@ -1,6 +1,9 @@
 import { existsSync, readFileSync } from 'fs'
+import { homedir } from 'os'
 import { join } from 'path'
-import { getAgentDir } from '@earendil-works/pi-coding-agent'
+
+/** 与 Pi SDK `getAgentDir()` 一致：~/.pi/agent */
+const PI_AGENT_DIR = join(homedir(), '.pi', 'agent')
 
 /** 提供商与环境变量映射（与 Pi CLI 常用约定一致） */
 const PROVIDER_ENV_KEYS: Record<string, string[]> = {
@@ -18,7 +21,7 @@ type AuthJson = Record<string, { api_key?: string; type?: string } | string>
 export function readAuthJsonProviders(): Set<string> {
   const providers = new Set<string>()
   try {
-    const authPath = join(getAgentDir(), 'auth.json')
+    const authPath = join(PI_AGENT_DIR, 'auth.json')
     if (!existsSync(authPath)) {
       return providers
     }
@@ -67,5 +70,5 @@ export function isProviderAuthConfigured(
  * 返回 Pi 使用的 agent 目录（~/.pi/agent）。
  */
 export function resolvePiAgentDir(): string {
-  return getAgentDir()
+  return PI_AGENT_DIR
 }

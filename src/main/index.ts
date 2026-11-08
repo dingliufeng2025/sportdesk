@@ -1,3 +1,4 @@
+import './bootstrap/fs-glob-polyfill'
 import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'path'
 import { initUserData } from './config-manager'
