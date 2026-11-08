@@ -11,7 +11,15 @@ import {
   refreshAllData,
   generateDailyDigest
 } from './adapters/fake-adapters'
-import { initSportsAgent, sendSportsAgentMessage, getPiMode, disposeSportsAgent } from './pi/sports-agent'
+import {
+  initSportsAgent,
+  sendSportsAgentMessage,
+  getPiMode,
+  disposeSportsAgent,
+  listPiModels,
+  getPiModelState,
+  setPiModel
+} from './pi/sports-agent'
 import type { SportFilter, SportDeskConfig, SecretsFile } from './types'
 import { SportDeskPaths } from './paths'
 
@@ -92,6 +100,14 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
   })
 
   ipcMain.handle('pi:mode', () => getPiMode())
+
+  ipcMain.handle('session:list-models', () => listPiModels())
+
+  ipcMain.handle('session:get-model', () => getPiModelState())
+
+  ipcMain.handle('session:set-model', async (_e, provider: string, modelId: string) =>
+    setPiModel(provider, modelId)
+  )
 
   ipcMain.on('session:dispose', () => {
     disposeSportsAgent()

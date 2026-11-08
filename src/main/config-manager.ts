@@ -10,7 +10,11 @@ const DEFAULT_CONFIG: SportDeskConfig = {
   ],
   refreshIntervalMinutes: 15,
   digestTime: '08:00',
-  timezone: 'Asia/Shanghai'
+  timezone: 'Asia/Shanghai',
+  aiModel: {
+    provider: 'anthropic',
+    modelId: 'claude-sonnet-4-5'
+  }
 }
 
 /**
